@@ -900,8 +900,11 @@ function renderTorneio(){
           });
           if(!closed){
             html += '<div class="match-foot">'+
-              '<button class="link-btn" data-action="undo-winner" data-match="'+m.id+'">desfazer resultado</button>'+
-              '<button class="link-btn" style="color:var(--muted);" data-action="delete-match" data-match="'+m.id+'">remover</button></div>';
+              '<button class="btn secondary sm" data-action="rematch" data-day="'+day.id+'" data-trio-a="'+a.id+'" data-trio-b="'+b.id+'">jogar de novo</button>'+
+              '<span style="display:flex;gap:10px;">'+
+                '<button class="link-btn" data-action="undo-winner" data-match="'+m.id+'">desfazer resultado</button>'+
+                '<button class="link-btn" style="color:var(--muted);" data-action="delete-match" data-match="'+m.id+'">remover</button>'+
+              '</span></div>';
           }
         } else {
           [[a,'a'],[b,'b']].forEach(function(pair){
@@ -1074,6 +1077,7 @@ document.addEventListener('click', function(e){
       saveScore(scMatch, scTrioA, scTrioB, scAEl?scAEl.value:'', scBEl?scBEl.value:'');
       break;
     }
+    case 'rematch': createManualMatch(state.selectedCycleId, t.getAttribute('data-day'), t.getAttribute('data-trio-a'), t.getAttribute('data-trio-b')); break;
     case 'toggle-athlete': toggleAthlete(t.getAttribute('data-athlete'), t.getAttribute('data-active')); break;
     case 'close-cycle': openConfirm('Encerrar este torneio e definir os classificados com base na classificação atual?', 'close-cycle', t.getAttribute('data-cycle')); break;
     case 'reopen-cycle': reopenCycle(t.getAttribute('data-cycle')); break;
