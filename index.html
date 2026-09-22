@@ -419,19 +419,25 @@ function selectCycle(id){
 }
 
 /* ---------- actions ---------- */
+function reportIfError(res){
+  if(res && res.error) alertBox('Não foi possível salvar: ' + res.error.message);
+  return res;
+}
 function createAthlete(name, unidade){
   name = name.trim();
   if(!name) return;
-  sb.from('rt_athletes').insert({name:name, active:true, unidade:(unidade||'').trim()||null}).then(function(){});
+  sb.from('rt_athletes').insert({name:name, active:true, unidade:(unidade||'').trim()||null}).then(function(res){
+    if(res.error) alertBox('Não foi possível salvar o atleta: ' + res.error.message);
+  });
 }
 function toggleAthlete(id, current){
-  sb.from('rt_athletes').update({active: current==='true' ? false : true}).eq('id', id).then(function(){});
+  sb.from('rt_athletes').update({active: current==='true' ? false : true}).eq('id', id).then(reportIfError);
 }
 function importAthletes(names, unidade){
   unidade = (unidade||'').trim();
   var rows = names.map(function(n){ return {name:n, active:true, unidade: unidade||null}; });
-  if(!rows.length) return Promise.resolve();
-  return sb.from('rt_athletes').insert(rows).then(function(){});
+  if(!rows.length) return Promise.resolve({error:null});
+  return sb.from('rt_athletes').insert(rows).then(function(res){ return res; });
 }
 
 /* ---------- importar lista: reconhecimento de nomes ----------
@@ -530,24 +536,25 @@ function createCycle(name, unidade){
   if(!name) return;
   sb.from('rt_cycles').insert({name:name, unidade: unidade.trim()||null, status:'aberto', qualified:[]}).select().single().then(function(res){
     if(!res.error && res.data) selectCycle(res.data.id);
+    else reportIfError(res);
   });
 }
 function createDay(cycleId, label, date){
   label = label.trim() || ('Dia ' + (daysSorted().length+1));
-  sb.from('rt_days').insert({cycle_id:cycleId, label:label, date:date||todayISO()}).then(function(){});
+  sb.from('rt_days').insert({cycle_id:cycleId, label:label, date:date||todayISO()}).then(reportIfError);
 }
 function setPresence(dayId, athleteIds){
-  sb.from('rt_days').update({present_ids: athleteIds}).eq('id', dayId).then(function(){});
+  sb.from('rt_days').update({present_ids: athleteIds}).eq('id', dayId).then(reportIfError);
 }
 function createTrio(cycleId, dayId, athleteIds){
-  if(athleteIds.length!==3 && athleteIds.length!==4) return;
+  if(athleteIds.length<2 || athleteIds.length>4) return;
   var label = trioLabelFor(athleteIds);
-  sb.from('rt_trios').insert({cycle_id:cycleId, day_id:dayId, label:label, athlete_ids:athleteIds}).then(function(){});
+  sb.from('rt_trios').insert({cycle_id:cycleId, day_id:dayId, label:label, athlete_ids:athleteIds}).then(reportIfError);
 }
 function deleteTrio(id){
   var used = state.matches.some(function(m){ return m.trio_a_id===id || m.trio_b_id===id; });
   if(used){ alertBox('Essa equipe já tem confrontos registrados. Remova os confrontos dela primeiro.'); return; }
-  sb.from('rt_trios').delete().eq('id', id).then(function(){});
+  sb.from('rt_trios').delete().eq('id', id).then(reportIfError);
 }
 function genRoundRobin(dayId, cycleId){
   var trios = triosForDay(dayId);
@@ -560,27 +567,27 @@ function genRoundRobin(dayId, cycleId){
       if(!existing[key]) rows.push({cycle_id:cycleId, day_id:dayId, trio_a_id:trios[i].id, trio_b_id:trios[j].id, winner_trio_id:null});
     }
   }
-  if(rows.length) sb.from('rt_matches').insert(rows).then(function(){});
+  if(rows.length) sb.from('rt_matches').insert(rows).then(reportIfError);
 }
 function createManualMatch(cycleId, dayId, trioAId, trioBId){
   if(!trioAId || !trioBId || trioAId===trioBId) return;
-  sb.from('rt_matches').insert({cycle_id:cycleId, day_id:dayId, trio_a_id:trioAId, trio_b_id:trioBId, winner_trio_id:null}).then(function(){});
+  sb.from('rt_matches').insert({cycle_id:cycleId, day_id:dayId, trio_a_id:trioAId, trio_b_id:trioBId, winner_trio_id:null}).then(reportIfError);
 }
 function setWinner(matchId, trioId){
-  sb.from('rt_matches').update({winner_trio_id:trioId, decided_at:new Date().toISOString()}).eq('id', matchId).then(function(){});
+  sb.from('rt_matches').update({winner_trio_id:trioId, decided_at:new Date().toISOString()}).eq('id', matchId).then(reportIfError);
 }
 function undoWinner(matchId){
-  sb.from('rt_matches').update({winner_trio_id:null, decided_at:null}).eq('id', matchId).then(function(){});
+  sb.from('rt_matches').update({winner_trio_id:null, decided_at:null}).eq('id', matchId).then(reportIfError);
 }
 function deleteMatch(id){
-  sb.from('rt_matches').delete().eq('id', id).then(function(){});
+  sb.from('rt_matches').delete().eq('id', id).then(reportIfError);
 }
 function closeCycle(id){
   var top3 = computeStandings().slice(0,3).map(function(r){return r.id;});
-  sb.from('rt_cycles').update({status:'encerrado', closed_at:new Date().toISOString(), qualified:top3}).eq('id', id).then(function(){});
+  sb.from('rt_cycles').update({status:'encerrado', closed_at:new Date().toISOString(), qualified:top3}).eq('id', id).then(reportIfError);
 }
 function reopenCycle(id){
-  sb.from('rt_cycles').update({status:'aberto', closed_at:null}).eq('id', id).then(function(){});
+  sb.from('rt_cycles').update({status:'aberto', closed_at:null}).eq('id', id).then(reportIfError);
 }
 
 /* ---------- modal helpers ---------- */
@@ -656,7 +663,8 @@ function modalNewTrio(dayId){
     '<h3>Nova equipe</h3>'+
     '<form id="formNewTrio" data-day="'+dayId+'" data-cycle="'+cycle.id+'">'+
       '<div class="field"><label>Tamanho da equipe</label>'+
-      '<div style="display:flex;gap:8px;">'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<label class="size-toggle"><input type="radio" name="teamSize" value="2"> Dupla (2)</label>'+
         '<label class="size-toggle"><input type="radio" name="teamSize" value="3" checked> Trio (3)</label>'+
         '<label class="size-toggle"><input type="radio" name="teamSize" value="4"> Quarteto (4)</label>'+
       '</div></div>'+
@@ -839,7 +847,7 @@ function renderTorneio(){
     html += '<div class="section-label">Equipes do dia</div>';
     if(trios.length){
       html += '<div class="trio-list">'+trios.map(function(t){
-        var sizeTag = t.athlete_ids.length===4 ? 'quarteto' : 'trio';
+        var sizeTag = t.athlete_ids.length===4 ? 'quarteto' : (t.athlete_ids.length===2 ? 'dupla' : 'trio');
         return '<div class="trio-chip"><b>'+esc(t.label)+':</b> <span class="names">'+t.athlete_ids.map(athleteName).map(esc).join(', ')+' <span class="muted">('+sizeTag+')</span></span>'+
           (closed?'':'<button class="del" data-action="delete-trio" data-trio="'+t.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>')+
         '</div>';
@@ -994,8 +1002,12 @@ document.addEventListener('click', function(e){
       });
       var importUnidadeVal = byId('importUnidadeInput') ? byId('importUnidadeInput').value : '';
       if(chosenNames.length){
-        importAthletes(chosenNames, importUnidadeVal).then(function(){
-          alertBox(chosenNames.length+' atleta(s) importado(s) com sucesso.');
+        importAthletes(chosenNames, importUnidadeVal).then(function(res){
+          if(res && res.error){
+            alertBox('Não foi possível importar: ' + res.error.message);
+          } else {
+            alertBox(chosenNames.length+' atleta(s) importado(s) com sucesso.');
+          }
         });
       }
       importCandidates = [];
