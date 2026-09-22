@@ -293,7 +293,9 @@ var state = {
   days:[], trios:[], matches:[],
   unsubDays:null, unsubTrios:null, unsubMatches:null,
   tab:'torneio',
-  elencoFilterUnidade:undefined
+  elencoFilterUnidade:undefined,
+  collapsedDays:{},
+  qualifyFormat:'trio'
 };
 var pendingConfirm = null;
 var importCandidates = [];
@@ -381,6 +383,12 @@ function computeStandings(){
     return {id:id, name:athleteName(id), wins:s.wins, games:s.games, pct: s.games? s.wins/s.games : 0};
   });
   rows.sort(function(x,y){ return y.wins-x.wins || y.pct-x.pct || x.name.localeCompare(y.name); });
+  // colocação: quem empata em vitórias fica na mesma posição (ranking tipo 1,1,3,4...)
+  var rank = 0, lastWins = null;
+  rows.forEach(function(r, i){
+    if(r.wins !== lastWins){ rank = i+1; lastWins = r.wins; }
+    r.rank = rank;
+  });
   return rows;
 }
 
@@ -609,8 +617,9 @@ function deleteMatch(id){
   sb.from('rt_matches').delete().eq('id', id).then(reportIfError);
 }
 function closeCycle(id){
-  var top3 = computeStandings().slice(0,3).map(function(r){return r.id;});
-  sb.from('rt_cycles').update({status:'encerrado', closed_at:new Date().toISOString(), qualified:top3}).eq('id', id).then(reportIfError);
+  var cutoff = state.qualifyFormat==='quarteto' ? 4 : 3;
+  var qualified = computeStandings().filter(function(r){ return r.rank<=cutoff; }).map(function(r){return r.id;});
+  sb.from('rt_cycles').update({status:'encerrado', closed_at:new Date().toISOString(), qualified:qualified}).eq('id', id).then(reportIfError);
 }
 function reopenCycle(id){
   sb.from('rt_cycles').update({status:'aberto', closed_at:null}).eq('id', id).then(reportIfError);
@@ -625,6 +634,32 @@ function alertBox(msg){
 function openConfirm(msg, action, payload){
   pendingConfirm = {action:action, payload:payload};
   openModal('<h3>Confirmar</h3><p class="small">'+esc(msg)+'</p><div class="modal-actions"><button class="btn secondary" data-action="close-modal">Cancelar</button><button class="btn primary" data-action="confirm-yes">Confirmar</button></div>');
+}
+function modalShareQualified(cycleId){
+  var cycle = cycleById(cycleId);
+  if(!cycle) return;
+  var standingsById = {};
+  computeStandings().forEach(function(r){ standingsById[r.id] = r; });
+  var qualifiedRows = (cycle.qualified||[]).map(function(id){
+    var s = standingsById[id];
+    return {id:id, name:athleteName(id), rank: s ? s.rank : null};
+  }).filter(function(r){ return r.name && r.name!=='—'; });
+  qualifiedRows.sort(function(x,y){ return (x.rank||99)-(y.rank||99) || x.name.localeCompare(y.name); });
+  var lines = ['🏆 SE7 — Torneio Interno', 'Turma: ' + cycle.name];
+  if(cycle.unidade) lines.push('Unidade: ' + cycle.unidade);
+  lines.push('');
+  lines.push('Classificados para a final:');
+  qualifiedRows.forEach(function(r){ lines.push((r.rank!=null ? r.rank+'º - ' : '- ') + r.name); });
+  var text = lines.join('\n');
+  openModal(
+    '<h3>Texto para o grupo</h3>'+
+    '<div class="small muted" style="margin-bottom:10px;">Copie e cole no grupo do WhatsApp.</div>'+
+    '<div class="field"><textarea id="shareText" rows="10" readonly>'+esc(text)+'</textarea></div>'+
+    '<div class="modal-actions">'+
+      '<button type="button" class="btn secondary" data-action="close-modal">Fechar</button>'+
+      '<button type="button" class="btn primary" data-action="copy-share-text">Copiar texto</button>'+
+    '</div>'
+  );
 }
 
 function modalNewCycle(){
@@ -856,9 +891,20 @@ function renderTorneio(){
   days.forEach(function(day){
     var trios = triosForDay(day.id);
     var matches = matchesForDay(day.id);
+    var isCollapsed = !!state.collapsedDays[day.id];
     html += '<div class="card day-card">'+
       '<div class="day-head"><div><div class="label" style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;">'+esc(day.label)+'</div>'+
-      '<div class="date">'+fmtDate(day.date)+'</div></div></div>';
+      '<div class="date">'+fmtDate(day.date)+'</div></div>'+
+      '<button class="btn ghost sm" data-action="toggle-day" data-day="'+day.id+'">'+(isCollapsed?'expandir':'minimizar')+'</button>'+
+      '</div>';
+
+    if(isCollapsed){
+      var decidedCount = matches.filter(function(m){return m.winner_trio_id;}).length;
+      var presentCount = Array.isArray(day.present_ids) ? day.present_ids.length : 0;
+      html += '<div class="small muted">'+presentCount+' presente(s) · '+trios.length+' equipe(s) · '+decidedCount+'/'+matches.length+' confronto(s) decidido(s)</div>';
+      html += '</div>';
+      return;
+    }
 
     html += '<div class="section-label">Presença</div>';
     if(!Array.isArray(day.present_ids)){
@@ -940,41 +986,55 @@ function renderTorneio(){
 function renderRanking(){
   var cycle = selectedCycle();
   var rows = computeStandings();
+  var closed = cycle.status==='encerrado';
+  var cutoff = state.qualifyFormat==='quarteto' ? 4 : 3;
+  var qualifiedIds = closed ? (cycle.qualified||[]) : rows.filter(function(r){return r.rank<=cutoff;}).map(function(r){return r.id;});
   var html = '<div class="card"><h2>'+esc(cycle.name)+'</h2>'+
     '<div class="small muted">Classificação acumulada de '+daysSorted().length+' dia(s) de treino.</div>';
   if(!rows.length){
     html += '<div style="height:8px"></div><div class="small muted">Ainda não há confrontos com resultado registrado.</div>';
   } else {
-    var top3 = rows.slice(0,3);
-    if(top3.length){
+    var podiumGroups = {1:[],2:[],3:[]};
+    rows.forEach(function(r){ if(podiumGroups[r.rank]) podiumGroups[r.rank].push(r); });
+    var hasPodium = podiumGroups[1].length || podiumGroups[2].length || podiumGroups[3].length;
+    if(hasPodium){
       html += '<div class="podium">';
-      var order = top3.length>=3 ? [top3[1],top3[0],top3[2]] : (top3.length===2 ? [top3[1],top3[0]] : [top3[0]]);
-      var classes = top3.length>=3 ? ['p2','p1','p3'] : (top3.length===2 ? ['p2','p1'] : ['p1']);
-      order.forEach(function(r, i){
-        if(!r) return;
-        html += '<div class="slot '+classes[i]+'"><div class="bar">'+(classes[i]==='p1'?'1º':classes[i]==='p2'?'2º':'3º')+'</div>'+
-          '<div class="name">'+esc(r.name)+'</div><div class="wins tabnum">'+r.wins+' vit.</div></div>';
+      [[2,'p2'],[1,'p1'],[3,'p3']].forEach(function(pair){
+        var rankNum = pair[0], cls = pair[1];
+        var group = podiumGroups[rankNum];
+        if(!group.length) return;
+        html += '<div class="slot '+cls+'"><div class="bar">'+rankNum+'º</div>'+
+          '<div class="name">'+group.map(function(r){return esc(r.name);}).join(', ')+'</div>'+
+          '<div class="wins tabnum">'+group[0].wins+' vit.</div></div>';
       });
       html += '</div>';
     }
     html += '<div style="overflow-x:auto;"><table class="standings"><thead><tr><th>#</th><th>Atleta</th><th class="num">V</th><th class="num">J</th><th class="num">%</th></tr></thead><tbody>';
-    rows.forEach(function(r, i){
-      var rankClass = i===0?'g':i===1?'s':i===2?'b':'';
-      html += '<tr><td><span class="rank-badge '+rankClass+'">'+(i+1)+'</span></td>'+
-        '<td>'+esc(r.name)+(i<3?' <span class="qualified-tag">classificado</span>':'')+'</td>'+
+    rows.forEach(function(r){
+      var rankClass = r.rank===1?'g':r.rank===2?'s':r.rank===3?'b':'';
+      var isQualified = qualifiedIds.indexOf(r.id)>=0;
+      html += '<tr><td><span class="rank-badge '+rankClass+'">'+r.rank+'</span></td>'+
+        '<td>'+esc(r.name)+(isQualified?' <span class="qualified-tag">classificado</span>':'')+'</td>'+
         '<td class="num tabnum">'+r.wins+'</td><td class="num tabnum">'+r.games+'</td><td class="num tabnum">'+Math.round(r.pct*100)+'%</td></tr>';
     });
     html += '</tbody></table></div>';
   }
   html += '</div>';
-  if(cycle.status==='aberto'){
+  if(!closed){
     html += '<div class="card"><h3>Encerrar torneio</h3>'+
-      '<div class="small muted" style="margin:6px 0 12px;">Isso trava novos dias, equipes e confrontos, e define os 3 primeiros da classificação atual como classificados para a final.</div>'+
+      '<div class="small muted" style="margin:6px 0 12px;">Isso trava novos dias, equipes e confrontos, e define os classificados para a final com base na classificação atual. Quem empatar em vitórias na última vaga também classifica.</div>'+
+      '<div class="field"><label>Formato da final</label>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<label class="size-toggle"><input type="radio" name="qualifyFormat" value="trio"'+(state.qualifyFormat==='trio'?' checked':'')+'> Trio — top 3</label>'+
+        '<label class="size-toggle"><input type="radio" name="qualifyFormat" value="quarteto"'+(state.qualifyFormat==='quarteto'?' checked':'')+'> Quarteto — top 4</label>'+
+      '</div></div>'+
       '<button class="btn primary block" data-action="close-cycle" data-cycle="'+cycle.id+'"'+(rows.length?'':' disabled')+'>Encerrar e definir classificados</button></div>';
   } else {
     var q = (cycle.qualified||[]).map(athleteName).filter(Boolean);
     html += '<div class="card" style="background:var(--success-bg);border-color:var(--success);"><h3 style="color:var(--success);">Classificados para a final</h3>'+
-      (q.length ? '<div style="margin-top:6px;">'+q.map(esc).map(function(n){return '<div class="small" style="padding:4px 0;">• '+n+'</div>';}).join('')+'</div>' : '<div class="small">Nenhum classificado registrado.</div>')+'</div>';
+      (q.length ? '<div style="margin-top:6px;">'+q.map(esc).map(function(n){return '<div class="small" style="padding:4px 0;">• '+n+'</div>';}).join('')+'</div>' : '<div class="small">Nenhum classificado registrado.</div>')+
+      (q.length ? '<div style="height:10px;"></div><button class="btn secondary sm" data-action="open-share-qualified" data-cycle="'+cycle.id+'">Copiar texto para o grupo</button>' : '')+
+      '</div>';
   }
   return html;
 }
@@ -1078,6 +1138,31 @@ document.addEventListener('click', function(e){
       break;
     }
     case 'rematch': createManualMatch(state.selectedCycleId, t.getAttribute('data-day'), t.getAttribute('data-trio-a'), t.getAttribute('data-trio-b')); break;
+    case 'toggle-day': {
+      var toggleDayId = t.getAttribute('data-day');
+      state.collapsedDays[toggleDayId] = !state.collapsedDays[toggleDayId];
+      render();
+      break;
+    }
+    case 'open-share-qualified': modalShareQualified(t.getAttribute('data-cycle')); break;
+    case 'copy-share-text': {
+      var shareTa = byId('shareText');
+      if(shareTa){
+        shareTa.focus(); shareTa.select();
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(shareTa.value).then(function(){
+            alertBox('Texto copiado! Agora é só colar no grupo.');
+          }).catch(function(){
+            alertBox('Não consegui copiar automaticamente — o texto já está selecionado, use copiar do teclado.');
+          });
+        } else {
+          var copyOk = false;
+          try{ copyOk = document.execCommand('copy'); }catch(e){}
+          alertBox(copyOk ? 'Texto copiado! Agora é só colar no grupo.' : 'Não consegui copiar automaticamente — o texto já está selecionado, use copiar do teclado.');
+        }
+      }
+      break;
+    }
     case 'toggle-athlete': toggleAthlete(t.getAttribute('data-athlete'), t.getAttribute('data-active')); break;
     case 'close-cycle': openConfirm('Encerrar este torneio e definir os classificados com base na classificação atual?', 'close-cycle', t.getAttribute('data-cycle')); break;
     case 'reopen-cycle': reopenCycle(t.getAttribute('data-cycle')); break;
@@ -1120,6 +1205,9 @@ document.addEventListener('change', function(e){
     selectCycle(e.target.value);
   } else if(e.target.id==='elencoUnidadeFilter'){
     state.elencoFilterUnidade = e.target.value;
+    render();
+  } else if(e.target.name==='qualifyFormat'){
+    state.qualifyFormat = e.target.value;
     render();
   }
 });
