@@ -215,6 +215,7 @@ table.standings td.num,table.standings th.num{text-align:right;}
 .field{margin-bottom:14px;}
 .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px;}
 .field input[type=text],.field input[type=date]{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:15px;font-family:inherit;}
+.field textarea{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:14px;font-family:inherit;box-sizing:border-box;}
 .check-list{border:1px solid var(--line);border-radius:10px;max-height:220px;overflow-y:auto;}
 .check-row{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);font-size:14px;}
 .check-row:last-child{border-bottom:none;}
@@ -280,6 +281,7 @@ var state = {
   elencoFilterUnidade:undefined
 };
 var pendingConfirm = null;
+var importCandidates = [];
 
 function esc(s){
   return String(s==null?'':s).replace(/[&<>"']/g, function(c){
@@ -424,6 +426,104 @@ function createAthlete(name, unidade){
 }
 function toggleAthlete(id, current){
   sb.from('rt_athletes').update({active: current==='true' ? false : true}).eq('id', id).then(function(){});
+}
+function importAthletes(names, unidade){
+  unidade = (unidade||'').trim();
+  var rows = names.map(function(n){ return {name:n, active:true, unidade: unidade||null}; });
+  if(!rows.length) return Promise.resolve();
+  return sb.from('rt_athletes').insert(rows).then(function(){});
+}
+
+/* ---------- importar lista: reconhecimento de nomes ----------
+   Recebe um texto colado (ex.: de uma planilha, com colunas extras como
+   id/Foto/Dt. Nascimento/Responsável/CPF/Cadastro) e extrai só os nomes.
+   Data de nascimento, responsável e CPF nunca são lidos para outro fim
+   além de servir de "âncora" para localizar a coluna do nome. */
+function looksLikeDate(s){
+  return /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(String(s||'').trim());
+}
+function looksLikeEmail(s){
+  return /@/.test(String(s||''));
+}
+function looksLikeCPF(s){
+  return /^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/.test(String(s||'').trim());
+}
+function looksLikeIdNumber(s){
+  return /^\d+$/.test(String(s||'').trim());
+}
+function looksLikeHeaderWord(s){
+  var h = String(s||'').trim().toLowerCase();
+  var words = ['id','foto','nome','dt. nascimento','dt nascimento','data de nascimento','nascimento','responsável','responsavel','responsável cpf','responsavel cpf','cpf','cadastro','data de cadastro','data cadastro'];
+  return words.indexOf(h) !== -1;
+}
+function looksLikePhotoPlaceholder(s){
+  var v = String(s||'').trim().toLowerCase().replace(/^[\[\(]+|[\]\)]+$/g,'');
+  if(!v) return false;
+  if(/^(foto|photo|image|img|imagem|picture|avatar|thumbnail|sem foto|no photo|sem imagem|ver foto|clique aqui)$/.test(v)) return true;
+  if(/^https?:\/\//.test(v)) return true;
+  if(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(v)) return true;
+  return false;
+}
+function isNameLike(s){
+  s = String(s||'').trim();
+  if(!s) return false;
+  if(looksLikeDate(s)) return false;
+  if(looksLikeEmail(s)) return false;
+  if(looksLikeCPF(s)) return false;
+  if(looksLikeIdNumber(s)) return false;
+  if(looksLikeHeaderWord(s)) return false;
+  if(looksLikePhotoPlaceholder(s)) return false;
+  if(!/[A-Za-zÀ-ÿ]/.test(s)) return false;
+  if(s.length > 60) return false;
+  return true;
+}
+function splitRowCells(line){
+  if(line.indexOf('\t') !== -1) return line.split('\t');
+  if(/\s{2,}/.test(line)) return line.split(/\s{2,}/);
+  return [line];
+}
+function parseNamesFromImport(text){
+  var lines = String(text||'').split(/\r?\n/);
+  var names = [];
+  lines.forEach(function(line){
+    line = line.trim();
+    if(!line) return;
+    var cells = splitRowCells(line).map(function(c){ return c.trim(); }).filter(function(c){ return c!==''; });
+    if(!cells.length) return;
+    var lowerJoined = cells.join(' ').toLowerCase();
+    if(lowerJoined.indexOf('nome') !== -1 && (lowerJoined.indexOf('nascimento') !== -1 || lowerJoined.indexOf('responsável') !== -1 || lowerJoined.indexOf('responsavel') !== -1 || lowerJoined.indexOf('cadastro') !== -1)){
+      return; // linha de cabeçalho da tabela
+    }
+    var candidate = null;
+    for(var i=1;i<cells.length;i++){
+      if(looksLikeDate(cells[i]) && isNameLike(cells[i-1])){
+        candidate = cells[i-1];
+        break;
+      }
+    }
+    if(!candidate){
+      var nameLikeCells = cells.filter(isNameLike);
+      if(nameLikeCells.length){
+        // prefere a célula que parece um nome completo (2+ palavras) —
+        // evita pegar sobras como "Foto"/nome de arquivo de imagem em
+        // listas que só têm foto + nome, sem outras colunas.
+        nameLikeCells.sort(function(a,b){
+          var aw = a.trim().split(/\s+/).length;
+          var bw = b.trim().split(/\s+/).length;
+          return bw - aw;
+        });
+        candidate = nameLikeCells[0];
+      }
+    }
+    if(candidate) names.push(candidate);
+  });
+  var seen = {};
+  var out = [];
+  names.forEach(function(n){
+    var key = n.toLowerCase();
+    if(!seen[key]){ seen[key]=true; out.push(n); }
+  });
+  return out;
 }
 function createCycle(name, unidade){
   name = name.trim();
@@ -626,6 +726,42 @@ function modalNewAthlete(){
   );
   setTimeout(function(){ var el=byId('athleteNameInput'); if(el) el.focus(); },30);
 }
+function modalImportList(){
+  importCandidates = [];
+  var suggestedUnidade = (selectedCycle() && selectedCycle().unidade) || '';
+  renderImportModal(suggestedUnidade, '');
+  setTimeout(function(){ var el=byId('importTextArea'); if(el) el.focus(); },30);
+}
+function renderImportModal(unidadeVal, text){
+  var existentes = unidadesPresentes();
+  var listHtml;
+  if(!importCandidates.length){
+    listHtml = '<div class="small muted" style="padding:8px 0;">Cole a lista e toque em "Detectar nomes".</div>';
+  } else {
+    listHtml = '<div class="small muted" style="margin:4px 0 8px;">'+importCandidates.length+' nome(s) reconhecido(s). Desmarque quem não deve entrar:</div>'+
+      '<div class="check-list">'+importCandidates.map(function(c,i){
+        return '<label class="check-row"><input type="checkbox" class="import-name-checkbox" data-idx="'+i+'" checked>'+
+          '<span>'+esc(c.name)+(c.dup?' <span class="muted small">(já existe no elenco)</span>':'')+'</span></label>';
+      }).join('')+'</div>';
+  }
+  openModal(
+    '<h3>Importar lista</h3>'+
+    '<p class="small muted">Cole a lista copiada da turma (ex.: de uma planilha). Só o nome de cada atleta é aproveitado — data de nascimento, responsável e CPF são ignorados e nunca são salvos.</p>'+
+    '<div class="field"><label for="importUnidadeInput">Unidade</label>'+
+      '<input type="text" id="importUnidadeInput" placeholder="Ex: Kids dos bancários" value="'+esc(unidadeVal||'')+'" list="importUnidadeOptions">'+
+      (existentes.length ? '<datalist id="importUnidadeOptions">'+existentes.map(function(u){return '<option value="'+esc(u)+'">';}).join('')+'</datalist>' : '')+
+    '</div>'+
+    '<div class="field"><label for="importTextArea">Lista colada</label>'+
+      '<textarea id="importTextArea" rows="6">'+esc(text||'')+'</textarea>'+
+    '</div>'+
+    '<div id="importPreviewArea">'+listHtml+'</div>'+
+    '<div class="modal-actions">'+
+      '<button type="button" class="btn secondary" data-action="close-modal">Cancelar</button>'+
+      '<button type="button" class="btn secondary" data-action="detect-import-names">'+(importCandidates.length?'Detectar de novo':'Detectar nomes')+'</button>'+
+      '<button type="button" class="btn primary" data-action="confirm-import-names"'+(importCandidates.length?'':' disabled')+'>Adicionar selecionados</button>'+
+    '</div>'
+  );
+}
 
 /* ---------- render ---------- */
 function render(){
@@ -799,8 +935,11 @@ function renderElenco(){
   if(state.elencoFilterUnidade!=='Todas'){
     athletes = athletes.filter(function(a){ return (a.unidade||'')===state.elencoFilterUnidade; });
   }
-  var html = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;">'+
-    '<h2>Elenco</h2><button class="btn primary sm" data-action="open-new-athlete">+ atleta</button></div>'+
+  var html = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">'+
+    '<h2>Elenco</h2><div style="display:flex;gap:8px;">'+
+    '<button class="btn secondary sm" data-action="open-import-list">Importar lista</button>'+
+    '<button class="btn primary sm" data-action="open-new-athlete">+ atleta</button>'+
+    '</div></div>'+
     '<div class="small muted" style="margin-top:4px;">Cadastre uma vez; use nas equipes de qualquer torneio. Desative quem não está mais treinando — o histórico é mantido.</div>';
   if(unidades.length){
     var opts = '<option value="Todas"'+(state.elencoFilterUnidade==='Todas'?' selected':'')+'>Todas as unidades</option>'+
@@ -834,6 +973,34 @@ document.addEventListener('click', function(e){
     case 'open-presence': modalPresence(t.getAttribute('data-day')); break;
     case 'open-new-match': modalNewMatch(t.getAttribute('data-day')); break;
     case 'open-new-athlete': modalNewAthlete(); break;
+    case 'open-import-list': modalImportList(); break;
+    case 'detect-import-names': {
+      var textEl = byId('importTextArea');
+      var unidadeEl = byId('importUnidadeInput');
+      var rawText = textEl ? textEl.value : '';
+      var unidadeVal = unidadeEl ? unidadeEl.value : '';
+      var detected = parseNamesFromImport(rawText);
+      importCandidates = detected.map(function(n){
+        var dup = state.athletes.some(function(a){ return String(a.name||'').trim().toLowerCase()===n.toLowerCase(); });
+        return {name:n, dup:dup};
+      });
+      renderImportModal(unidadeVal, rawText);
+      break;
+    }
+    case 'confirm-import-names': {
+      var checkedBoxes = document.querySelectorAll('.import-name-checkbox:checked');
+      var chosenNames = Array.prototype.map.call(checkedBoxes, function(cb){
+        return importCandidates[parseInt(cb.getAttribute('data-idx'),10)].name;
+      });
+      var importUnidadeVal = byId('importUnidadeInput') ? byId('importUnidadeInput').value : '';
+      if(chosenNames.length){
+        importAthletes(chosenNames, importUnidadeVal).then(function(){
+          alertBox(chosenNames.length+' atleta(s) importado(s) com sucesso.');
+        });
+      }
+      importCandidates = [];
+      break;
+    }
     case 'close-modal': closeModal(); break;
     case 'confirm-yes':
       if(pendingConfirm && pendingConfirm.action==='delete-match'){ deleteMatch(pendingConfirm.payload); }
