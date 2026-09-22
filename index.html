@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ranking de Trios — SE7</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --navy:#2D3192;
+  --charcoal:#35363A;
+  --bg:#F4EEDF;
+  --card:#FFFFFF;
+  --card-alt:#FBF6E9;
+  --line:#E3D6B4;
+  --text:#35363A;
+  --muted:#7A7566;
+  --coral:#FF6B45;
+  --coral-ink:#E0522C;
+  --success:#2E8B57;
+  --success-bg:#E4F3EA;
+  --gold:#B8860B;
+  --silver:#7A828C;
+  --bronze:#A85C2E;
+  --header-bg:#2D3192;
+  --header-fg:#FFFFFF;
+  --accent2:#2D3192;
+  --shadow:0 1px 2px rgba(53,54,58,.06),0 4px 14px rgba(53,54,58,.06);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#1D1D22;
+    --card:#28282F;
+    --card-alt:#302F38;
+    --line:#3C3B44;
+    --text:#EFEDE6;
+    --muted:#A6A198;
+    --coral:#FF7C58;
+    --coral-ink:#FF6B45;
+    --success:#4CAF7D;
+    --success-bg:#1E332A;
+    --accent2:#9FA3E8;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Public Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+img{max-width:100%;}
+[hidden]{display:none!important;}
+h1,h2,h3,.display{
+  font-family:'Barlow Condensed','Oswald',sans-serif;
+  font-weight:700;
+  text-wrap:balance;
+  letter-spacing:.2px;
+}
+.tabnum{font-variant-numeric:tabular-nums;}
+button{font-family:inherit;}
+#app{min-height:100%;display:flex;flex-direction:column;}
+.topbar{
+  position:sticky;top:0;z-index:20;
+  background:var(--header-bg);color:var(--header-fg);
+  padding:14px 16px 12px;
+  box-shadow:0 2px 10px rgba(0,0,0,.15);
+}
+.topbar .brand{
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;
+  font-size:22px;text-transform:uppercase;letter-spacing:.5px;
+  display:flex;align-items:baseline;gap:8px;
+}
+.topbar .brand small{
+  font-family:'Public Sans',sans-serif;font-weight:600;text-transform:none;
+  font-size:13px;letter-spacing:0;opacity:.85;
+}
+.cycle-row{display:flex;align-items:center;gap:8px;margin-top:10px;}
+.cycle-select{
+  flex:1;min-width:0;
+  background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3);
+  border-radius:10px;padding:9px 10px;font-size:14px;font-family:inherit;
+  appearance:none;-webkit-appearance:none;
+}
+.cycle-select option{color:#111;}
+.icon-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:38px;height:38px;border-radius:10px;border:1px solid rgba(255,255,255,.35);
+  background:rgba(255,255,255,.1);color:#fff;flex-shrink:0;cursor:pointer;
+}
+.icon-btn svg{width:18px;height:18px;}
+.status-chip{
+  display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.4px;padding:3px 9px;border-radius:99px;flex-shrink:0;
+}
+.status-chip.aberto{background:var(--coral);color:#fff;}
+.status-chip.encerrado{background:rgba(255,255,255,.2);color:#fff;}
+
+main{flex:1;padding:16px 16px calc(96px + env(safe-area-inset-bottom,0px));max-width:640px;width:100%;margin:0 auto;}
+
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:16px;
+  padding:16px;margin-bottom:14px;box-shadow:var(--shadow);
+}
+.card h2{margin:0 0 2px;font-size:20px;}
+.card h3{margin:0;font-size:17px;}
+.muted{color:var(--muted);}
+.small{font-size:13px;}
+.empty-state{text-align:center;padding:32px 18px;color:var(--muted);}
+.empty-state .display{font-size:19px;color:var(--text);margin-bottom:6px;}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border:none;border-radius:11px;padding:11px 16px;font-size:14px;font-weight:700;
+  cursor:pointer;line-height:1;
+}
+.btn.primary{background:var(--coral);color:#fff;}
+.btn.primary:active{background:var(--coral-ink);}
+.btn.secondary{background:var(--card-alt);color:var(--text);border:1px solid var(--line);}
+.btn.ghost{background:transparent;color:var(--accent2);border:1px solid var(--line);}
+.btn.block{width:100%;}
+.btn.sm{padding:8px 12px;font-size:13px;border-radius:9px;}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+.link-btn{background:none;border:none;color:var(--accent2);font-weight:700;font-size:13px;cursor:pointer;padding:4px 0;}
+
+.day-card .day-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px;}
+.day-head .label{font-size:18px;}
+.day-head .date{color:var(--muted);font-size:13px;}
+.section-label{
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--muted);margin:14px 0 8px;
+}
+.trio-list{display:flex;flex-wrap:wrap;gap:8px;}
+.trio-chip{
+  background:var(--card-alt);border:1px solid var(--line);border-radius:11px;
+  padding:8px 10px;font-size:13px;display:flex;align-items:center;gap:8px;max-width:100%;
+}
+.trio-chip .names{color:var(--muted);}
+.trio-chip .del{background:none;border:none;color:var(--muted);cursor:pointer;padding:0;line-height:1;flex-shrink:0;}
+.trio-chip .del svg{width:14px;height:14px;display:block;}
+
+.match{border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:8px;background:var(--card-alt);}
+.match-row{
+  display:flex;align-items:center;gap:10px;width:100%;
+  background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;margin-bottom:6px;cursor:pointer;text-align:left;font-family:inherit;
+  min-height:44px;
+}
+.match-row:last-child{margin-bottom:0;}
+.match-row.winner{background:var(--success-bg);border-color:var(--success);}
+.match-row .check{
+  width:20px;height:20px;border-radius:99px;border:2px solid var(--line);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+}
+.match-row.winner .check{background:var(--success);border-color:var(--success);}
+.match-row .check svg{width:12px;height:12px;color:#fff;}
+.match-row .names{font-size:14px;font-weight:600;flex:1;}
+.match-foot{display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding:0 2px;}
+
+.podium{display:flex;align-items:flex-end;gap:10px;margin:6px 0 18px;}
+.podium .slot{flex:1;text-align:center;}
+.podium .bar{
+  border-radius:12px 12px 6px 6px;display:flex;align-items:flex-start;justify-content:center;
+  padding-top:8px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:22px;
+}
+.podium .slot.p1 .bar{height:92px;background:linear-gradient(180deg,var(--gold),#8f6a08);}
+.podium .slot.p2 .bar{height:70px;background:linear-gradient(180deg,var(--silver),#5b626b);}
+.podium .slot.p3 .bar{height:54px;background:linear-gradient(180deg,var(--bronze),#7c4522);}
+.podium .name{margin-top:8px;font-weight:700;font-size:13px;}
+.podium .wins{color:var(--muted);font-size:12px;}
+
+table.standings{width:100%;border-collapse:collapse;font-size:14px;}
+table.standings th{
+  text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--muted);padding:6px 6px;border-bottom:1px solid var(--line);
+}
+table.standings td{padding:9px 6px;border-bottom:1px solid var(--line);}
+table.standings tr:last-child td{border-bottom:none;}
+table.standings td.num,table.standings th.num{text-align:right;}
+.rank-badge{
+  display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+  border-radius:99px;font-weight:800;font-size:12px;background:var(--card-alt);color:var(--muted);
+}
+.rank-badge.g{background:var(--gold);color:#fff;}
+.rank-badge.s{background:var(--silver);color:#fff;}
+.rank-badge.b{background:var(--bronze);color:#fff;}
+.qualified-tag{font-size:11px;font-weight:700;color:var(--success);}
+
+.roster-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line);}
+.roster-row:last-child{border-bottom:none;}
+.switch{position:relative;width:42px;height:24px;border-radius:99px;border:none;background:var(--line);cursor:pointer;flex-shrink:0;}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:99px;background:#fff;transition:transform .15s ease;box-shadow:0 1px 2px rgba(0,0,0,.3);}
+.switch.on{background:var(--success);}
+.switch.on::after{transform:translateX(18px);}
+
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;
+  display:flex;background:var(--card);border-top:1px solid var(--line);
+  padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));
+  box-shadow:0 -2px 10px rgba(0,0,0,.06);
+}
+.tab-btn{flex:1;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;border-radius:10px;}
+.tab-btn svg{width:22px;height:22px;}
+.tab-btn.active{color:var(--accent2);}
+
+.overlay{position:fixed;inset:0;background:rgba(29,29,34,.5);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
+.modal{background:var(--card);width:100%;max-width:480px;border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));max-height:85vh;overflow-y:auto;}
+.modal h3{margin:0 0 12px;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px;}
+.field input[type=text],.field input[type=date]{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:15px;font-family:inherit;}
+.check-list{border:1px solid var(--line);border-radius:10px;max-height:220px;overflow-y:auto;}
+.check-row{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);font-size:14px;}
+.check-row:last-child{border-bottom:none;}
+.check-row input{width:18px;height:18px;flex-shrink:0;}
+.check-row.disabled{opacity:.4;}
+.counter{font-size:12px;color:var(--muted);margin:6px 2px 0;}
+.modal-actions{display:flex;gap:10px;margin-top:16px;}
+.modal-actions .btn{flex:1;}
+.trio-select{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:15px;margin-bottom:10px;font-family:inherit;}
+.warn-box{background:var(--card-alt);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--muted);margin-bottom:14px;}
+.size-toggle{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;background:var(--card-alt);color:var(--text);}
+.size-toggle input{width:16px;height:16px;flex-shrink:0;}
+.size-toggle:has(input:checked){border-color:var(--coral);color:var(--coral-ink);background:var(--card);}
+.loading{display:flex;align-items:center;justify-content:center;padding:60px 20px;color:var(--muted);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">SE7 <small>Ranking de Trios</small></div>
+    <div class="cycle-row" id="cycleRow"></div>
+  </header>
+  <main id="content"><div class="loading">Carregando…</div></main>
+  <nav class="tabbar">
+    <button class="tab-btn active" data-action="select-tab" data-tab="torneio">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3c2.5 2.5 2.5 15.5 0 18M3 12h18M5.5 6.5c3 2 10 2 13 0M5.5 17.5c3-2 10-2 13 0"/></svg>
+      <span>Torneio</span>
+    </button>
+    <button class="tab-btn" data-action="select-tab" data-tab="ranking">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M6 4h12l-1 7a5 5 0 0 1-10 0L6 4Z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3"/></svg>
+      <span>Classificação</span>
+    </button>
+    <button class="tab-btn" data-action="select-tab" data-tab="elenco">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.8-3.6 3.4-5.6 6.5-5.6s5.7 2 6.5 5.6"/><circle cx="17.5" cy="9" r="2.6"/><path d="M15.8 14.6c2.4.4 4 2.1 4.6 5"/></svg>
+      <span>Elenco</span>
+    </button>
+  </nav>
+</div>
+<div id="overlay" class="overlay" hidden><div class="modal" id="modalBody"></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+"use strict";
+
+/* ======================================================================
+   CONFIGURAÇÃO — cole aqui a URL e a chave "anon public" do seu projeto
+   Supabase (Project Settings → API). NUNCA cole a chave "service_role"
+   aqui — essa é secreta e não deve ir pro GitHub.
+   ====================================================================== */
+var SUPABASE_URL = "https://kxwujsfgwedqxsagvwro.supabase.co";
+var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4d3Vqc2Znd2VkcXhzYWd2d3JvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwOTM5MTcsImV4cCI6MjEwNTY2OTkxN30.QCUkPH4CK5U8F0owordtvjnOyZElbaJjCFRJP0XkAcc";
+
+var configured = SUPABASE_URL.indexOf("COLE_AQUI") === -1 && SUPABASE_ANON_KEY.indexOf("COLE_AQUI") === -1;
+var sb = configured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+var state = {
+  ready:false,
+  athletes:[], cycles:[], selectedCycleId:null,
+  days:[], trios:[], matches:[],
+  unsubDays:null, unsubTrios:null, unsubMatches:null,
+  tab:'torneio'
+};
+var pendingConfirm = null;
+
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function byId(id){ return document.getElementById(id); }
+function fmtDate(iso){
+  if(!iso) return '';
+  var d = new Date(iso+'T00:00:00');
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+}
+function todayISO(){
+  var d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function athleteName(id){
+  var a = state.athletes.find(function(x){return x.id===id;});
+  return a ? a.name : '—';
+}
+function firstName(fullName){
+  return String(fullName||'').trim().split(/\s+/)[0] || '—';
+}
+function trioLabelFor(athleteIds){
+  return athleteIds.map(function(id){ return firstName(athleteName(id)); }).join(' / ');
+}
+function activeAthletes(){
+  return state.athletes.filter(function(a){return a.active!==false;});
+}
+function presentAthletes(day){
+  var pool = activeAthletes();
+  if(!day || !Array.isArray(day.present_ids)) return pool;
+  var ids = {};
+  day.present_ids.forEach(function(id){ ids[id]=true; });
+  return pool.filter(function(a){ return ids[a.id]; });
+}
+function cycleById(id){ return state.cycles.find(function(c){return c.id===id;}); }
+function selectedCycle(){ return cycleById(state.selectedCycleId); }
+function dayById(id){ return state.days.find(function(d){return d.id===id;}); }
+function daysSorted(){
+  return state.days.slice().sort(function(a,b){
+    return (a.date||'').localeCompare(b.date||'') || (a.created_at||'').localeCompare(b.created_at||'');
+  });
+}
+function triosForDay(dayId){ return state.trios.filter(function(t){return t.day_id===dayId;}); }
+function matchesForDay(dayId){ return state.matches.filter(function(m){return m.day_id===dayId;}); }
+function trioById(id){ return state.trios.find(function(t){return t.id===id;}); }
+
+function computeStandings(){
+  var stats = {};
+  state.matches.forEach(function(m){
+    if(!m.winner_trio_id) return;
+    var a = trioById(m.trio_a_id), b = trioById(m.trio_b_id);
+    if(!a || !b) return;
+    var winner = m.winner_trio_id===a.id ? a : b;
+    var loser = m.winner_trio_id===a.id ? b : a;
+    (winner.athlete_ids||[]).forEach(function(id){
+      stats[id] = stats[id] || {wins:0,games:0};
+      stats[id].wins++; stats[id].games++;
+    });
+    (loser.athlete_ids||[]).forEach(function(id){
+      stats[id] = stats[id] || {wins:0,games:0};
+      stats[id].games++;
+    });
+  });
+  var rows = Object.keys(stats).map(function(id){
+    var s = stats[id];
+    return {id:id, name:athleteName(id), wins:s.wins, games:s.games, pct: s.games? s.wins/s.games : 0};
+  });
+  rows.sort(function(x,y){ return y.wins-x.wins || y.pct-x.pct || x.name.localeCompare(y.name); });
+  return rows;
+}
+
+/* ---------- supabase data layer ---------- */
+function refetch(table, filterCol, filterVal, orderCol, onData){
+  var q = sb.from(table).select('*');
+  if(filterCol) q = q.eq(filterCol, filterVal);
+  if(orderCol) q = q.order(orderCol, {ascending:true});
+  q.then(function(res){
+    if(res.error){ console.error(table, res.error); return; }
+    onData(res.data || []);
+  });
+}
+function subscribeTable(table, filterCol, filterVal, orderCol, onData){
+  refetch(table, filterCol, filterVal, orderCol, onData);
+  var chName = 'ch_'+table+'_'+(filterVal||'all')+'_'+Math.random().toString(36).slice(2);
+  var cfg = {event:'*', schema:'public', table:table};
+  if(filterCol) cfg.filter = filterCol+'=eq.'+filterVal;
+  var channel = sb.channel(chName)
+    .on('postgres_changes', cfg, function(){ refetch(table, filterCol, filterVal, orderCol, onData); })
+    .subscribe();
+  return function(){ sb.removeChannel(channel); };
+}
+
+function init(){
+  if(!configured){ state.ready='unavailable'; render(); return; }
+  state.ready = true;
+  subscribeTable('rt_athletes', null, null, 'name', function(rows){ state.athletes = rows; render(); });
+  subscribeTable('rt_cycles', null, null, 'created_at', function(rows){
+    state.cycles = rows.slice().reverse();
+    if(!state.selectedCycleId && state.cycles.length){
+      var open = state.cycles.find(function(c){return c.status==='aberto';});
+      selectCycle((open||state.cycles[0]).id);
+    } else if(state.selectedCycleId && !cycleById(state.selectedCycleId) && state.cycles.length){
+      selectCycle(state.cycles[0].id);
+    } else { render(); }
+  });
+  render();
+}
+
+function selectCycle(id){
+  state.selectedCycleId = id;
+  if(state.unsubDays) state.unsubDays();
+  if(state.unsubTrios) state.unsubTrios();
+  if(state.unsubMatches) state.unsubMatches();
+  state.days = []; state.trios = []; state.matches = [];
+  state.unsubDays = subscribeTable('rt_days', 'cycle_id', id, 'created_at', function(rows){ state.days = rows; render(); });
+  state.unsubTrios = subscribeTable('rt_trios', 'cycle_id', id, 'created_at', function(rows){ state.trios = rows; render(); });
+  state.unsubMatches = subscribeTable('rt_matches', 'cycle_id', id, 'created_at', function(rows){ state.matches = rows; render(); });
+  render();
+}
+
+/* ---------- actions ---------- */
+function createAthlete(name){
+  name = name.trim();
+  if(!name) return;
+  sb.from('rt_athletes').insert({name:name, active:true}).then(function(){});
+}
+function toggleAthlete(id, current){
+  sb.from('rt_athletes').update({active: current==='true' ? false : true}).eq('id', id).then(function(){});
+}
+function createCycle(name, unidade){
+  name = name.trim();
+  if(!name) return;
+  sb.from('rt_cycles').insert({name:name, unidade: unidade.trim()||null, status:'aberto', qualified:[]}).select().single().then(function(res){
+    if(!res.error && res.data) selectCycle(res.data.id);
+  });
+}
+function createDay(cycleId, label, date){
+  label = label.trim() || ('Dia ' + (daysSorted().length+1));
+  sb.from('rt_days').insert({cycle_id:cycleId, label:label, date:date||todayISO()}).then(function(){});
+}
+function setPresence(dayId, athleteIds){
+  sb.from('rt_days').update({present_ids: athleteIds}).eq('id', dayId).then(function(){});
+}
+function createTrio(cycleId, dayId, athleteIds){
+  if(athleteIds.length!==3 && athleteIds.length!==4) return;
+  var label = trioLabelFor(athleteIds);
+  sb.from('rt_trios').insert({cycle_id:cycleId, day_id:dayId, label:label, athlete_ids:athleteIds}).then(function(){});
+}
+function deleteTrio(id){
+  var used = state.matches.some(function(m){ return m.trio_a_id===id || m.trio_b_id===id; });
+  if(used){ alertBox('Essa equipe já tem confrontos registrados. Remova os confrontos dela primeiro.'); return; }
+  sb.from('rt_trios').delete().eq('id', id).then(function(){});
+}
+function genRoundRobin(dayId, cycleId){
+  var trios = triosForDay(dayId);
+  var existing = {};
+  matchesForDay(dayId).forEach(function(m){ existing[[m.trio_a_id,m.trio_b_id].sort().join('|')] = true; });
+  var rows = [];
+  for(var i=0;i<trios.length;i++){
+    for(var j=i+1;j<trios.length;j++){
+      var key = [trios[i].id, trios[j].id].sort().join('|');
+      if(!existing[key]) rows.push({cycle_id:cycleId, day_id:dayId, trio_a_id:trios[i].id, trio_b_id:trios[j].id, winner_trio_id:null});
+    }
+  }
+  if(rows.length) sb.from('rt_matches').insert(rows).then(function(){});
+}
+function createManualMatch(cycleId, dayId, trioAId, trioBId){
+  if(!trioAId || !trioBId || trioAId===trioBId) return;
+  sb.from('rt_matches').insert({cycle_id:cycleId, day_id:dayId, trio_a_id:trioAId, trio_b_id:trioBId, winner_trio_id:null}).then(function(){});
+}
+function setWinner(matchId, trioId){
+  sb.from('rt_matches').update({winner_trio_id:trioId, decided_at:new Date().toISOString()}).eq('id', matchId).then(function(){});
+}
+function undoWinner(matchId){
+  sb.from('rt_matches').update({winner_trio_id:null, decided_at:null}).eq('id', matchId).then(function(){});
+}
+function deleteMatch(id){
+  sb.from('rt_matches').delete().eq('id', id).then(function(){});
+}
+function closeCycle(id){
+  var top3 = computeStandings().slice(0,3).map(function(r){return r.id;});
+  sb.from('rt_cycles').update({status:'encerrado', closed_at:new Date().toISOString(), qualified:top3}).eq('id', id).then(function(){});
+}
+function reopenCycle(id){
+  sb.from('rt_cycles').update({status:'aberto', closed_at:null}).eq('id', id).then(function(){});
+}
+
+/* ---------- modal helpers ---------- */
+function openModal(html){ byId('modalBody').innerHTML = html; byId('overlay').hidden = false; }
+function closeModal(){ byId('overlay').hidden = true; byId('modalBody').innerHTML=''; pendingConfirm=null; }
+function alertBox(msg){
+  openModal('<h3>Aviso</h3><p class="small">'+esc(msg)+'</p><div class="modal-actions"><button class="btn primary block" data-action="close-modal">Entendi</button></div>');
+}
+function openConfirm(msg, action, payload){
+  pendingConfirm = {action:action, payload:payload};
+  openModal('<h3>Confirmar</h3><p class="small">'+esc(msg)+'</p><div class="modal-actions"><button class="btn secondary" data-action="close-modal">Cancelar</button><button class="btn primary" data-action="confirm-yes">Confirmar</button></div>');
+}
+
+function modalNewCycle(){
+  openModal(
+    '<h3>Novo torneio interno</h3>'+
+    '<form id="formNewCycle">'+
+      '<div class="field"><label for="cycleNameInput">Nome</label>'+
+      '<input type="text" id="cycleNameInput" placeholder="Ex: Torneio Interno — Setembro/2026"></div>'+
+      '<div class="field"><label for="cycleUnidadeInput">Unidade (opcional)</label>'+
+      '<input type="text" id="cycleUnidadeInput" placeholder="Ex: Altiplano"></div>'+
+      '<div class="modal-actions">'+
+        '<button type="button" class="btn secondary" data-action="close-modal">Cancelar</button>'+
+        '<button type="submit" class="btn primary">Criar</button>'+
+      '</div>'+
+    '</form>'
+  );
+  setTimeout(function(){ var el=byId('cycleNameInput'); if(el) el.focus(); },30);
+}
+function modalNewDay(){
+  var cycle = selectedCycle();
+  if(!cycle) return;
+  openModal(
+    '<h3>Novo dia de treino</h3>'+
+    '<form id="formNewDay" data-cycle="'+cycle.id+'">'+
+      '<div class="field"><label for="dayDateInput">Data</label>'+
+      '<input type="date" id="dayDateInput" value="'+todayISO()+'"></div>'+
+      '<div class="field"><label for="dayLabelInput">Nome do dia (opcional)</label>'+
+      '<input type="text" id="dayLabelInput" placeholder="Ex: Dia '+(daysSorted().length+1)+'"></div>'+
+      '<div class="modal-actions">'+
+        '<button type="button" class="btn secondary" data-action="close-modal">Cancelar</button>'+
+        '<button type="submit" class="btn primary">Adicionar</button>'+
+      '</div>'+
+    '</form>'
+  );
+}
+function modalNewTrio(dayId){
+  var cycle = selectedCycle();
+  var day = dayById(dayId);
+  var used = {};
+  triosForDay(dayId).forEach(function(t){ (t.athlete_ids||[]).forEach(function(id){ used[id]=true; }); });
+  var pool = presentAthletes(day);
+  if(!day || !Array.isArray(day.present_ids)){
+    openModal(
+      '<h3>Nova equipe</h3>'+
+      '<div class="warn-box">Marque a presença dos atletas desse evento antes de montar as equipes — assim só aparece quem está lá.</div>'+
+      '<div class="modal-actions">'+
+        '<button type="button" class="btn secondary" data-action="close-modal">Cancelar</button>'+
+        '<button type="button" class="btn primary" data-action="open-presence" data-day="'+dayId+'">Marcar presença</button>'+
+      '</div>'
+    );
+    return;
+  }
+  var rows = pool.map(function(a){
+    var taken = used[a.id];
+    return '<label class="check-row'+(taken?' disabled':'')+'">'+
+      '<input type="checkbox" class="trio-athlete-checkbox" value="'+a.id+'"'+(taken?' disabled':'')+'>'+
+      esc(a.name)+(taken?' <span class="muted small">(já em outra equipe hoje)</span>':'')+
+    '</label>';
+  }).join('');
+  if(!pool.length) rows = '<div class="small muted" style="padding:12px;">Ninguém foi marcado como presente nesse evento ainda.</div>';
+  openModal(
+    '<h3>Nova equipe</h3>'+
+    '<form id="formNewTrio" data-day="'+dayId+'" data-cycle="'+cycle.id+'">'+
+      '<div class="field"><label>Tamanho da equipe</label>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<label class="size-toggle"><input type="radio" name="teamSize" value="3" checked> Trio (3)</label>'+
+        '<label class="size-toggle"><input type="radio" name="teamSize" value="4"> Quarteto (4)</label>'+
+      '</div></div>'+
+      '<div class="field"><label>Atletas presentes</label>'+
+      '<div class="check-list">'+rows+'</div>'+
+      '<div class="counter" id="trioCounter">Selecionados: 0/3</div></div>'+
+      '<div class="small muted" id="trioPreview" style="margin-bottom:10px;">A equipe será nomeada pelo primeiro nome de cada atleta.</div>'+
+      '<div class="modal-actions">'+
+        '<button type="button" class="btn secondary" data-action="close-modal">Cancelar</button>'+
+        '<button type="submit" class="btn primary" id="trioSubmitBtn" disabled>Adicionar</button>'+
+      '</div>'+
+    '</form>'
+  );
+}
+function modalPresence(dayId){
+  var day = dayById(dayId);
+  var pool = activeAthletes();
+  var already = Array.isArray(day && day.present_ids) ? day.present_ids : null;
+  var rows = pool.map(function(a){
+    var checked = already ? already.indexOf(a.id)>=0 : true;
+    return '<label class="check-row"><input type="checkbox" class="presence-checkbox" value="'+a.id+'"'+(checked?' checked':'')+'>'+esc(a.name)+'</label>';
+  }).join('');
+  if(!pool.length) rows = '<div class="small muted" style="padding:12px;">Cadastre atletas no Elenco primeiro.</div>';
+  openModal(
+    '<h3>Presença do evento</h3>'+
+    '<form id="formPresence" data-day="'+dayId+'">'+
+      '<div class="field"><label>Quem está presente hoje?</label><div class="check-list">'+rows+'</div></div>'+
+      '<div class="modal-actions">'+
+        '<button type="button" class="btn secondary" data-action="close-modal">Cancelar</button>'+
+        '<button type="submit" class="btn primary">Salvar presença</button>'+
+      '</div>'+
+    '</form>'
+  );
+}
+function modalNewMatch(dayId){
+  var cycle = selectedCycle();
+  var trios = triosForDay(dayId);
+  if(trios.length<2){ alertBox('É preciso ter pelo menos 2 equipes nesse dia.'); return; }
+  var opts = trios.map(function(t){ return '<option value="'+t.id+'">'+esc(t.label)+' ('+t.athlete_ids.map(athleteName).join(', ')+')</option>'; }).join('');
+  openModal(
+    '<h3>Novo confronto</h3>'+
+    '<form id="formNewMatch" data-day="'+dayId+'" data-cycle="'+cycle.id+'">'+
+      '<div class="field"><label for="matchTrioA">Equipe A</label><select class="trio-select" id="matchTrioA">'+opts+'</select></div>'+
+      '<div class="field"><label for="matchTrioB">Equipe B</label><select class="trio-select" id="matchTrioB">'+opts+'</select></div>'+
+      '<div class="modal-actions">'+
+        '<button type="button" class="btn secondary" data-action="close-modal">Cancelar</button>'+
+        '<button type="submit" class="btn primary">Adicionar</button>'+
+      '</div>'+
+    '</form>'
+  );
+}
+function modalNewAthlete(){
+  openModal(
+    '<h3>Novo atleta</h3>'+
+    '<form id="formNewAthlete">'+
+      '<div class="field"><label for="athleteNameInput">Nome</label><input type="text" id="athleteNameInput" placeholder="Nome do atleta"></div>'+
+      '<div class="modal-actions">'+
+        '<button type="button" class="btn secondary" data-action="close-modal">Cancelar</button>'+
+        '<button type="submit" class="btn primary">Adicionar</button>'+
+      '</div>'+
+    '</form>'
+  );
+  setTimeout(function(){ var el=byId('athleteNameInput'); if(el) el.focus(); },30);
+}
+
+/* ---------- render ---------- */
+function render(){
+  renderCycleRow();
+  if(state.ready==='unavailable'){
+    byId('content').innerHTML = '<div class="card empty-state"><div class="display">Configuração pendente</div><div class="small">Abra o arquivo index.html e cole a URL e a chave "anon public" do seu projeto Supabase no topo do script (procure por COLE_AQUI). Depois é só recarregar a página.</div></div>';
+    return;
+  }
+  if(!state.ready){ byId('content').innerHTML = '<div class="loading">Carregando…</div>'; return; }
+  Array.prototype.forEach.call(document.querySelectorAll('.tab-btn'), function(b){
+    b.classList.toggle('active', b.getAttribute('data-tab')===state.tab);
+  });
+  if(state.tab==='elenco'){ byId('content').innerHTML = renderElenco(); return; }
+  if(!state.cycles.length){
+    byId('content').innerHTML =
+      '<div class="card empty-state"><div class="display">Nenhum torneio ainda</div>'+
+      '<div class="small">Crie o primeiro torneio interno da unidade para começar a montar equipes e confrontos.</div>'+
+      '<div style="height:14px"></div><button class="btn primary" data-action="open-new-cycle">Criar torneio</button></div>';
+    return;
+  }
+  if(!selectedCycle()){ byId('content').innerHTML = '<div class="loading">Carregando…</div>'; return; }
+  byId('content').innerHTML = state.tab==='ranking' ? renderRanking() : renderTorneio();
+}
+
+function renderCycleRow(){
+  var row = byId('cycleRow');
+  if(!state.ready || state.ready==='unavailable' || !state.cycles.length){ row.innerHTML=''; return; }
+  var opts = state.cycles.map(function(c){
+    return '<option value="'+c.id+'"'+(c.id===state.selectedCycleId?' selected':'')+'>'+esc(c.name)+(c.status==='encerrado'?' (encerrado)':'')+'</option>';
+  }).join('');
+  var cur = selectedCycle();
+  var chip = cur ? '<span class="status-chip '+(cur.status==='aberto'?'aberto':'encerrado')+'">'+(cur.status==='aberto'?'Aberto':'Encerrado')+'</span>' : '';
+  row.innerHTML =
+    '<select class="cycle-select" id="cycleSelect">'+opts+'</select>'+chip+
+    '<button class="icon-btn" data-action="open-new-cycle" title="Novo torneio">'+
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'+
+    '</button>';
+}
+
+function renderTorneio(){
+  var cycle = selectedCycle();
+  var closed = cycle.status==='encerrado';
+  var html = '';
+  if(closed){
+    var q = (cycle.qualified||[]).map(athleteName).filter(Boolean);
+    html += '<div class="card" style="background:var(--success-bg);border-color:var(--success);">'+
+      '<div class="small" style="font-weight:700;color:var(--success);margin-bottom:2px;">TORNEIO ENCERRADO</div>'+
+      (q.length ? '<div class="small">Classificados para a final: <b>'+q.map(esc).join(', ')+'</b></div>' : '<div class="small">Nenhum classificado calculado.</div>')+
+      '<div style="height:8px"></div><button class="link-btn" data-action="reopen-cycle" data-cycle="'+cycle.id+'">Reabrir torneio</button></div>';
+  }
+  var days = daysSorted();
+  if(!days.length){
+    html += '<div class="card empty-state"><div class="display">Sem dias registrados</div>'+
+      '<div class="small">Adicione o primeiro dia de treino deste torneio para montar as equipes.</div>'+
+      '<div style="height:14px"></div>'+(closed?'':'<button class="btn primary" data-action="open-new-day">+ novo dia</button>')+'</div>';
+    return html;
+  }
+  days.forEach(function(day){
+    var trios = triosForDay(day.id);
+    var matches = matchesForDay(day.id);
+    html += '<div class="card day-card">'+
+      '<div class="day-head"><div><div class="label" style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;">'+esc(day.label)+'</div>'+
+      '<div class="date">'+fmtDate(day.date)+'</div></div></div>';
+
+    html += '<div class="section-label">Presença</div>';
+    if(!Array.isArray(day.present_ids)){
+      html += '<div class="small muted">Presença ainda não marcada — quem estiver presente forma a categoria do dia.</div>';
+      if(!closed) html += '<div style="height:8px"></div><button class="btn secondary sm" data-action="open-presence" data-day="'+day.id+'">Marcar presença</button>';
+    } else {
+      var present = presentAthletes(day);
+      html += present.length ? ('<div class="trio-list">'+present.map(function(a){ return '<div class="trio-chip">'+esc(a.name)+'</div>'; }).join('')+'</div>') : '<div class="small muted">Ninguém marcado como presente.</div>';
+      if(!closed) html += '<div style="height:8px"></div><button class="btn ghost sm" data-action="open-presence" data-day="'+day.id+'">editar presença</button>';
+    }
+
+    html += '<div class="section-label">Equipes do dia</div>';
+    if(trios.length){
+      html += '<div class="trio-list">'+trios.map(function(t){
+        var sizeTag = t.athlete_ids.length===4 ? 'quarteto' : 'trio';
+        return '<div class="trio-chip"><b>'+esc(t.label)+':</b> <span class="names">'+t.athlete_ids.map(athleteName).map(esc).join(', ')+' <span class="muted">('+sizeTag+')</span></span>'+
+          (closed?'':'<button class="del" data-action="delete-trio" data-trio="'+t.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>')+
+        '</div>';
+      }).join('')+'</div>';
+    } else {
+      html += '<div class="small muted">Nenhuma equipe montada ainda.</div>';
+    }
+    if(!closed) html += '<div style="height:8px"></div><button class="btn secondary sm" data-action="open-new-trio" data-day="'+day.id+'">+ equipe</button>';
+
+    html += '<div class="section-label">Confrontos</div>';
+    if(matches.length){
+      matches.forEach(function(m){
+        var a = trioById(m.trio_a_id), b = trioById(m.trio_b_id);
+        if(!a||!b) return;
+        html += '<div class="match">';
+        [[a,m.winner_trio_id===a.id],[b,m.winner_trio_id===b.id]].forEach(function(pair){
+          var trio=pair[0], won=pair[1];
+          html += '<button class="match-row'+(won?' winner':'')+'" data-action="set-winner" data-match="'+m.id+'" data-trio="'+trio.id+'"'+(closed?' disabled':'')+'>'+
+            '<span class="check">'+(won?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>':'')+'</span>'+
+            '<span class="names">'+esc(trio.label)+' <span class="muted" style="font-weight:400;">— '+trio.athlete_ids.map(athleteName).map(esc).join(', ')+'</span></span>'+
+          '</button>';
+        });
+        if(!closed){
+          html += '<div class="match-foot">'+
+            (m.winner_trio_id ? '<button class="link-btn" data-action="undo-winner" data-match="'+m.id+'">desfazer resultado</button>' : '<span></span>')+
+            '<button class="link-btn" style="color:var(--muted);" data-action="delete-match" data-match="'+m.id+'">remover</button></div>';
+        }
+        html += '</div>';
+      });
+    } else {
+      html += '<div class="small muted">Nenhum confronto ainda.</div>';
+    }
+    if(!closed){
+      html += '<div style="height:10px;display:flex;gap:8px;flex-wrap:wrap;">'+
+        (trios.length>=2 ? '<button class="btn secondary sm" data-action="gen-roundrobin" data-day="'+day.id+'">Gerar confrontos (todos x todos)</button>' : '')+
+        (trios.length>=2 ? '<button class="btn ghost sm" data-action="open-new-match" data-day="'+day.id+'">+ confronto manual</button>' : '')+
+      '</div>';
+    }
+    html += '</div>';
+  });
+  if(!closed) html += '<button class="btn secondary block" data-action="open-new-day">+ novo dia de treino</button>';
+  return html;
+}
+
+function renderRanking(){
+  var cycle = selectedCycle();
+  var rows = computeStandings();
+  var html = '<div class="card"><h2>'+esc(cycle.name)+'</h2>'+
+    '<div class="small muted">Classificação acumulada de '+daysSorted().length+' dia(s) de treino.</div>';
+  if(!rows.length){
+    html += '<div style="height:8px"></div><div class="small muted">Ainda não há confrontos com resultado registrado.</div>';
+  } else {
+    var top3 = rows.slice(0,3);
+    if(top3.length){
+      html += '<div class="podium">';
+      var order = top3.length>=3 ? [top3[1],top3[0],top3[2]] : (top3.length===2 ? [top3[1],top3[0]] : [top3[0]]);
+      var classes = top3.length>=3 ? ['p2','p1','p3'] : (top3.length===2 ? ['p2','p1'] : ['p1']);
+      order.forEach(function(r, i){
+        if(!r) return;
+        html += '<div class="slot '+classes[i]+'"><div class="bar">'+(classes[i]==='p1'?'1º':classes[i]==='p2'?'2º':'3º')+'</div>'+
+          '<div class="name">'+esc(r.name)+'</div><div class="wins tabnum">'+r.wins+' vit.</div></div>';
+      });
+      html += '</div>';
+    }
+    html += '<div style="overflow-x:auto;"><table class="standings"><thead><tr><th>#</th><th>Atleta</th><th class="num">V</th><th class="num">J</th><th class="num">%</th></tr></thead><tbody>';
+    rows.forEach(function(r, i){
+      var rankClass = i===0?'g':i===1?'s':i===2?'b':'';
+      html += '<tr><td><span class="rank-badge '+rankClass+'">'+(i+1)+'</span></td>'+
+        '<td>'+esc(r.name)+(i<3?' <span class="qualified-tag">classificado</span>':'')+'</td>'+
+        '<td class="num tabnum">'+r.wins+'</td><td class="num tabnum">'+r.games+'</td><td class="num tabnum">'+Math.round(r.pct*100)+'%</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+  html += '</div>';
+  if(cycle.status==='aberto'){
+    html += '<div class="card"><h3>Encerrar torneio</h3>'+
+      '<div class="small muted" style="margin:6px 0 12px;">Isso trava novos dias, equipes e confrontos, e define os 3 primeiros da classificação atual como classificados para a final.</div>'+
+      '<button class="btn primary block" data-action="close-cycle" data-cycle="'+cycle.id+'"'+(rows.length?'':' disabled')+'>Encerrar e definir classificados</button></div>';
+  } else {
+    var q = (cycle.qualified||[]).map(athleteName).filter(Boolean);
+    html += '<div class="card" style="background:var(--success-bg);border-color:var(--success);"><h3 style="color:var(--success);">Classificados para a final</h3>'+
+      (q.length ? '<div style="margin-top:6px;">'+q.map(esc).map(function(n){return '<div class="small" style="padding:4px 0;">• '+n+'</div>';}).join('')+'</div>' : '<div class="small">Nenhum classificado registrado.</div>')+'</div>';
+  }
+  return html;
+}
+
+function renderElenco(){
+  var athletes = state.athletes;
+  var html = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;">'+
+    '<h2>Elenco</h2><button class="btn primary sm" data-action="open-new-athlete">+ atleta</button></div>'+
+    '<div class="small muted" style="margin-top:4px;">Cadastre uma vez; use nas equipes de qualquer torneio. Desative quem não está mais treinando — o histórico é mantido.</div>';
+  if(!athletes.length){
+    html += '<div class="small muted" style="padding:16px 0;">Nenhum atleta cadastrado ainda.</div>';
+  } else {
+    html += '<div style="margin-top:8px;">'+athletes.map(function(a){
+      var on = a.active!==false;
+      return '<div class="roster-row"><span>'+esc(a.name)+(on?'':' <span class="muted small">(inativo)</span>')+'</span>'+
+        '<button class="switch'+(on?' on':'')+'" data-action="toggle-athlete" data-athlete="'+a.id+'" data-active="'+on+'"></button></div>';
+    }).join('')+'</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', function(e){
+  var t = e.target.closest('[data-action]');
+  if(!t) return;
+  var action = t.getAttribute('data-action');
+  switch(action){
+    case 'select-tab': state.tab = t.getAttribute('data-tab'); render(); break;
+    case 'open-new-cycle': modalNewCycle(); break;
+    case 'open-new-day': modalNewDay(); break;
+    case 'open-new-trio': modalNewTrio(t.getAttribute('data-day')); break;
+    case 'open-presence': modalPresence(t.getAttribute('data-day')); break;
+    case 'open-new-match': modalNewMatch(t.getAttribute('data-day')); break;
+    case 'open-new-athlete': modalNewAthlete(); break;
+    case 'close-modal': closeModal(); break;
+    case 'confirm-yes':
+      if(pendingConfirm && pendingConfirm.action==='delete-match'){ deleteMatch(pendingConfirm.payload); }
+      if(pendingConfirm && pendingConfirm.action==='close-cycle'){ closeCycle(pendingConfirm.payload); }
+      closeModal();
+      break;
+    case 'gen-roundrobin': genRoundRobin(t.getAttribute('data-day'), state.selectedCycleId); break;
+    case 'delete-trio': deleteTrio(t.getAttribute('data-trio')); break;
+    case 'delete-match': openConfirm('Remover este confronto?', 'delete-match', t.getAttribute('data-match')); break;
+    case 'undo-winner': undoWinner(t.getAttribute('data-match')); break;
+    case 'set-winner': setWinner(t.getAttribute('data-match'), t.getAttribute('data-trio')); break;
+    case 'toggle-athlete': toggleAthlete(t.getAttribute('data-athlete'), t.getAttribute('data-active')); break;
+    case 'close-cycle': openConfirm('Encerrar este torneio e definir os classificados com base na classificação atual?', 'close-cycle', t.getAttribute('data-cycle')); break;
+    case 'reopen-cycle': reopenCycle(t.getAttribute('data-cycle')); break;
+  }
+});
+
+function currentTeamSize(){
+  var sel = document.querySelector('input[name="teamSize"]:checked');
+  return sel ? parseInt(sel.value,10) : 3;
+}
+function updateTrioModalState(){
+  var size = currentTeamSize();
+  var boxes = document.querySelectorAll('.trio-athlete-checkbox');
+  var checked = document.querySelectorAll('.trio-athlete-checkbox:checked');
+  var n = checked.length;
+  var counterEl = byId('trioCounter');
+  if(counterEl) counterEl.textContent = 'Selecionados: '+n+'/'+size;
+  Array.prototype.forEach.call(boxes, function(b){
+    if(!b.checked) b.disabled = (n>=size) || b.closest('.check-row').classList.contains('disabled');
+  });
+  var submitBtn = byId('trioSubmitBtn');
+  if(submitBtn) submitBtn.disabled = (n!==size);
+  var preview = byId('trioPreview');
+  if(preview){
+    if(n===size){
+      var ids = Array.prototype.map.call(checked, function(b){return b.value;});
+      preview.textContent = 'Nome da equipe: ' + trioLabelFor(ids);
+    } else {
+      preview.textContent = 'A equipe será nomeada pelo primeiro nome de cada atleta.';
+    }
+  }
+}
+document.addEventListener('change', function(e){
+  if(e.target.classList.contains('trio-athlete-checkbox')){
+    updateTrioModalState();
+  } else if(e.target.name==='teamSize'){
+    Array.prototype.forEach.call(document.querySelectorAll('.trio-athlete-checkbox'), function(b){ b.checked=false; });
+    updateTrioModalState();
+  } else if(e.target.id==='cycleSelect'){
+    selectCycle(e.target.value);
+  }
+});
+
+document.addEventListener('submit', function(e){
+  var form = e.target;
+  if(form.id==='formNewCycle'){
+    e.preventDefault();
+    createCycle(byId('cycleNameInput').value, byId('cycleUnidadeInput').value);
+    closeModal();
+  } else if(form.id==='formNewDay'){
+    e.preventDefault();
+    createDay(form.getAttribute('data-cycle'), byId('dayLabelInput').value, byId('dayDateInput').value);
+    closeModal();
+  } else if(form.id==='formNewTrio'){
+    e.preventDefault();
+    var ids = Array.prototype.map.call(document.querySelectorAll('.trio-athlete-checkbox:checked'), function(b){return b.value;});
+    createTrio(form.getAttribute('data-cycle'), form.getAttribute('data-day'), ids);
+    closeModal();
+  } else if(form.id==='formPresence'){
+    e.preventDefault();
+    var presentIds = Array.prototype.map.call(document.querySelectorAll('.presence-checkbox:checked'), function(b){return b.value;});
+    setPresence(form.getAttribute('data-day'), presentIds);
+    closeModal();
+  } else if(form.id==='formNewMatch'){
+    e.preventDefault();
+    createManualMatch(form.getAttribute('data-cycle'), form.getAttribute('data-day'), byId('matchTrioA').value, byId('matchTrioB').value);
+    closeModal();
+  } else if(form.id==='formNewAthlete'){
+    e.preventDefault();
+    createAthlete(byId('athleteNameInput').value);
+    closeModal();
+  }
+});
+
+byId('overlay').addEventListener('click', function(e){ if(e.target.id==='overlay') closeModal(); });
+
+init();
+})();
+</script>
+</body>
+</html>
