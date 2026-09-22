@@ -161,7 +161,22 @@ main{flex:1;padding:16px 16px calc(96px + env(safe-area-inset-bottom,0px));max-w
 .match-row.winner .check{background:var(--success);border-color:var(--success);}
 .match-row .check svg{width:12px;height:12px;color:#fff;}
 .match-row .names{font-size:14px;font-weight:600;flex:1;}
-.match-foot{display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding:0 2px;}
+.match-foot{display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding:0 2px;gap:10px;flex-wrap:wrap;}
+
+.score-row{
+  display:flex;align-items:center;gap:10px;width:100%;
+  background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;margin-bottom:6px;min-height:44px;
+}
+.score-row:last-of-type{margin-bottom:0;}
+.score-row .names{font-size:14px;font-weight:600;flex:1;}
+.score-row.winner{background:var(--success-bg);border-color:var(--success);}
+.score-row .score-val{font-size:17px;font-weight:800;min-width:22px;text-align:right;}
+.score-input{
+  width:56px;padding:8px 6px;border-radius:8px;border:1px solid var(--line);
+  background:var(--bg);color:var(--text);font-size:16px;font-weight:700;text-align:center;
+  font-family:inherit;
+}
 
 .podium{display:flex;align-items:flex-end;gap:10px;margin:6px 0 18px;}
 .podium .slot{flex:1;text-align:center;}
@@ -573,11 +588,22 @@ function createManualMatch(cycleId, dayId, trioAId, trioBId){
   if(!trioAId || !trioBId || trioAId===trioBId) return;
   sb.from('rt_matches').insert({cycle_id:cycleId, day_id:dayId, trio_a_id:trioAId, trio_b_id:trioBId, winner_trio_id:null}).then(reportIfError);
 }
-function setWinner(matchId, trioId){
-  sb.from('rt_matches').update({winner_trio_id:trioId, decided_at:new Date().toISOString()}).eq('id', matchId).then(reportIfError);
+function saveScore(matchId, trioAId, trioBId, scoreARaw, scoreBRaw){
+  var scoreA = parseInt(scoreARaw, 10);
+  var scoreB = parseInt(scoreBRaw, 10);
+  if(isNaN(scoreA) || isNaN(scoreB) || scoreA<0 || scoreB<0){
+    alertBox('Digite a pontuação dos dois times.');
+    return;
+  }
+  if(scoreA === scoreB){
+    alertBox('As pontuações não podem ser iguais — é preciso ter um vencedor.');
+    return;
+  }
+  var winnerId = scoreA > scoreB ? trioAId : trioBId;
+  sb.from('rt_matches').update({score_a:scoreA, score_b:scoreB, winner_trio_id:winnerId, decided_at:new Date().toISOString()}).eq('id', matchId).then(reportIfError);
 }
 function undoWinner(matchId){
-  sb.from('rt_matches').update({winner_trio_id:null, decided_at:null}).eq('id', matchId).then(reportIfError);
+  sb.from('rt_matches').update({winner_trio_id:null, decided_at:null, score_a:null, score_b:null}).eq('id', matchId).then(reportIfError);
 }
 function deleteMatch(id){
   sb.from('rt_matches').delete().eq('id', id).then(reportIfError);
@@ -848,7 +874,7 @@ function renderTorneio(){
     if(trios.length){
       html += '<div class="trio-list">'+trios.map(function(t){
         var sizeTag = t.athlete_ids.length===4 ? 'quarteto' : (t.athlete_ids.length===2 ? 'dupla' : 'trio');
-        return '<div class="trio-chip"><b>'+esc(t.label)+':</b> <span class="names">'+t.athlete_ids.map(athleteName).map(esc).join(', ')+' <span class="muted">('+sizeTag+')</span></span>'+
+        return '<div class="trio-chip"><b>'+esc(t.label)+'</b> <span class="muted">('+sizeTag+')</span>'+
           (closed?'':'<button class="del" data-action="delete-trio" data-trio="'+t.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>')+
         '</div>';
       }).join('')+'</div>';
@@ -863,17 +889,33 @@ function renderTorneio(){
         var a = trioById(m.trio_a_id), b = trioById(m.trio_b_id);
         if(!a||!b) return;
         html += '<div class="match">';
-        [[a,m.winner_trio_id===a.id],[b,m.winner_trio_id===b.id]].forEach(function(pair){
-          var trio=pair[0], won=pair[1];
-          html += '<button class="match-row'+(won?' winner':'')+'" data-action="set-winner" data-match="'+m.id+'" data-trio="'+trio.id+'"'+(closed?' disabled':'')+'>'+
-            '<span class="check">'+(won?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>':'')+'</span>'+
-            '<span class="names">'+esc(trio.label)+' <span class="muted" style="font-weight:400;">— '+trio.athlete_ids.map(athleteName).map(esc).join(', ')+'</span></span>'+
-          '</button>';
-        });
-        if(!closed){
-          html += '<div class="match-foot">'+
-            (m.winner_trio_id ? '<button class="link-btn" data-action="undo-winner" data-match="'+m.id+'">desfazer resultado</button>' : '<span></span>')+
-            '<button class="link-btn" style="color:var(--muted);" data-action="delete-match" data-match="'+m.id+'">remover</button></div>';
+        if(m.winner_trio_id){
+          [[a,m.winner_trio_id===a.id,m.score_a],[b,m.winner_trio_id===b.id,m.score_b]].forEach(function(triple){
+            var trio=triple[0], won=triple[1], score=triple[2];
+            html += '<div class="score-row'+(won?' winner':'')+'">'+
+              '<span class="check">'+(won?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>':'')+'</span>'+
+              '<span class="names">'+esc(trio.label)+'</span>'+
+              (score!=null ? '<span class="score-val tabnum">'+score+'</span>' : '')+
+            '</div>';
+          });
+          if(!closed){
+            html += '<div class="match-foot">'+
+              '<button class="link-btn" data-action="undo-winner" data-match="'+m.id+'">desfazer resultado</button>'+
+              '<button class="link-btn" style="color:var(--muted);" data-action="delete-match" data-match="'+m.id+'">remover</button></div>';
+          }
+        } else {
+          [[a,'a'],[b,'b']].forEach(function(pair){
+            var trio=pair[0], side=pair[1];
+            html += '<div class="score-row">'+
+              '<span class="names">'+esc(trio.label)+'</span>'+
+              '<input type="number" class="score-input" inputmode="numeric" min="0" placeholder="0" data-match-score="'+m.id+'" data-side="'+side+'"'+(closed?' disabled':'')+'>'+
+            '</div>';
+          });
+          if(!closed){
+            html += '<div class="match-foot">'+
+              '<button class="btn primary sm" data-action="save-score" data-match="'+m.id+'" data-trio-a="'+a.id+'" data-trio-b="'+b.id+'">Salvar resultado</button>'+
+              '<button class="link-btn" style="color:var(--muted);" data-action="delete-match" data-match="'+m.id+'">remover</button></div>';
+          }
         }
         html += '</div>';
       });
@@ -1023,7 +1065,15 @@ document.addEventListener('click', function(e){
     case 'delete-trio': deleteTrio(t.getAttribute('data-trio')); break;
     case 'delete-match': openConfirm('Remover este confronto?', 'delete-match', t.getAttribute('data-match')); break;
     case 'undo-winner': undoWinner(t.getAttribute('data-match')); break;
-    case 'set-winner': setWinner(t.getAttribute('data-match'), t.getAttribute('data-trio')); break;
+    case 'save-score': {
+      var scMatch = t.getAttribute('data-match');
+      var scTrioA = t.getAttribute('data-trio-a');
+      var scTrioB = t.getAttribute('data-trio-b');
+      var scAEl = document.querySelector('input[data-match-score="'+scMatch+'"][data-side="a"]');
+      var scBEl = document.querySelector('input[data-match-score="'+scMatch+'"][data-side="b"]');
+      saveScore(scMatch, scTrioA, scTrioB, scAEl?scAEl.value:'', scBEl?scBEl.value:'');
+      break;
+    }
     case 'toggle-athlete': toggleAthlete(t.getAttribute('data-athlete'), t.getAttribute('data-active')); break;
     case 'close-cycle': openConfirm('Encerrar este torneio e definir os classificados com base na classificação atual?', 'close-cycle', t.getAttribute('data-cycle')); break;
     case 'reopen-cycle': reopenCycle(t.getAttribute('data-cycle')); break;
