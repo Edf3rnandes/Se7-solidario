@@ -276,7 +276,8 @@ var state = {
   athletes:[], cycles:[], selectedCycleId:null,
   days:[], trios:[], matches:[],
   unsubDays:null, unsubTrios:null, unsubMatches:null,
-  tab:'torneio'
+  tab:'torneio',
+  elencoFilterUnidade:undefined
 };
 var pendingConfirm = null;
 
@@ -309,8 +310,21 @@ function trioLabelFor(athleteIds){
 function activeAthletes(){
   return state.athletes.filter(function(a){return a.active!==false;});
 }
-function presentAthletes(day){
+function unidadesPresentes(){
+  var set = {};
+  state.athletes.forEach(function(a){ if(a.unidade) set[a.unidade]=true; });
+  return Object.keys(set).sort();
+}
+function scopedAthletes(){
   var pool = activeAthletes();
+  var cycle = selectedCycle();
+  if(cycle && cycle.unidade){
+    return pool.filter(function(a){ return a.unidade===cycle.unidade; });
+  }
+  return pool;
+}
+function presentAthletes(day){
+  var pool = scopedAthletes();
   if(!day || !Array.isArray(day.present_ids)) return pool;
   var ids = {};
   day.present_ids.forEach(function(id){ ids[id]=true; });
@@ -403,10 +417,10 @@ function selectCycle(id){
 }
 
 /* ---------- actions ---------- */
-function createAthlete(name){
+function createAthlete(name, unidade){
   name = name.trim();
   if(!name) return;
-  sb.from('rt_athletes').insert({name:name, active:true}).then(function(){});
+  sb.from('rt_athletes').insert({name:name, active:true, unidade:(unidade||'').trim()||null}).then(function(){});
 }
 function toggleAthlete(id, current){
   sb.from('rt_athletes').update({active: current==='true' ? false : true}).eq('id', id).then(function(){});
@@ -559,7 +573,7 @@ function modalNewTrio(dayId){
 }
 function modalPresence(dayId){
   var day = dayById(dayId);
-  var pool = activeAthletes();
+  var pool = scopedAthletes();
   var already = Array.isArray(day && day.present_ids) ? day.present_ids : null;
   var rows = pool.map(function(a){
     var checked = already ? already.indexOf(a.id)>=0 : true;
@@ -595,10 +609,15 @@ function modalNewMatch(dayId){
   );
 }
 function modalNewAthlete(){
+  var suggestedUnidade = (selectedCycle() && selectedCycle().unidade) || '';
+  var existentes = unidadesPresentes();
   openModal(
     '<h3>Novo atleta</h3>'+
     '<form id="formNewAthlete">'+
       '<div class="field"><label for="athleteNameInput">Nome</label><input type="text" id="athleteNameInput" placeholder="Nome do atleta"></div>'+
+      '<div class="field"><label for="athleteUnidadeInput">Unidade</label><input type="text" id="athleteUnidadeInput" placeholder="Ex: Altiplano" value="'+esc(suggestedUnidade)+'" list="unidadeOptions">'+
+      (existentes.length ? '<datalist id="unidadeOptions">'+existentes.map(function(u){return '<option value="'+esc(u)+'">';}).join('')+'</datalist>' : '')+
+      '</div>'+
       '<div class="modal-actions">'+
         '<button type="button" class="btn secondary" data-action="close-modal">Cancelar</button>'+
         '<button type="submit" class="btn primary">Adicionar</button>'+
@@ -772,16 +791,29 @@ function renderRanking(){
 }
 
 function renderElenco(){
+  if(state.elencoFilterUnidade===undefined){
+    state.elencoFilterUnidade = (selectedCycle() && selectedCycle().unidade) || 'Todas';
+  }
+  var unidades = unidadesPresentes();
   var athletes = state.athletes;
+  if(state.elencoFilterUnidade!=='Todas'){
+    athletes = athletes.filter(function(a){ return (a.unidade||'')===state.elencoFilterUnidade; });
+  }
   var html = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;">'+
     '<h2>Elenco</h2><button class="btn primary sm" data-action="open-new-athlete">+ atleta</button></div>'+
     '<div class="small muted" style="margin-top:4px;">Cadastre uma vez; use nas equipes de qualquer torneio. Desative quem não está mais treinando — o histórico é mantido.</div>';
+  if(unidades.length){
+    var opts = '<option value="Todas"'+(state.elencoFilterUnidade==='Todas'?' selected':'')+'>Todas as unidades</option>'+
+      unidades.map(function(u){ return '<option value="'+esc(u)+'"'+(state.elencoFilterUnidade===u?' selected':'')+'>'+esc(u)+'</option>'; }).join('');
+    html += '<div class="field" style="margin:12px 0 0;"><label for="elencoUnidadeFilter">Mostrando</label>'+
+      '<select class="trio-select" id="elencoUnidadeFilter" style="margin-bottom:0;">'+opts+'</select></div>';
+  }
   if(!athletes.length){
-    html += '<div class="small muted" style="padding:16px 0;">Nenhum atleta cadastrado ainda.</div>';
+    html += '<div class="small muted" style="padding:16px 0;">Nenhum atleta'+(state.elencoFilterUnidade!=='Todas'?' nessa unidade':' cadastrado')+' ainda.</div>';
   } else {
     html += '<div style="margin-top:8px;">'+athletes.map(function(a){
       var on = a.active!==false;
-      return '<div class="roster-row"><span>'+esc(a.name)+(on?'':' <span class="muted small">(inativo)</span>')+'</span>'+
+      return '<div class="roster-row"><span>'+esc(a.name)+(a.unidade?' <span class="muted small">— '+esc(a.unidade)+'</span>':'')+(on?'':' <span class="muted small">(inativo)</span>')+'</span>'+
         '<button class="switch'+(on?' on':'')+'" data-action="toggle-athlete" data-athlete="'+a.id+'" data-active="'+on+'"></button></div>';
     }).join('')+'</div>';
   }
@@ -853,6 +885,9 @@ document.addEventListener('change', function(e){
     updateTrioModalState();
   } else if(e.target.id==='cycleSelect'){
     selectCycle(e.target.value);
+  } else if(e.target.id==='elencoUnidadeFilter'){
+    state.elencoFilterUnidade = e.target.value;
+    render();
   }
 });
 
@@ -882,7 +917,7 @@ document.addEventListener('submit', function(e){
     closeModal();
   } else if(form.id==='formNewAthlete'){
     e.preventDefault();
-    createAthlete(byId('athleteNameInput').value);
+    createAthlete(byId('athleteNameInput').value, byId('athleteUnidadeInput').value);
     closeModal();
   }
 });
